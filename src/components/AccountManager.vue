@@ -9,9 +9,35 @@
       </div>
 
       <div class="account-manager-body">
+        <!-- Sección de Nube (Sincronización Automática) -->
+        <div class="account-section cloud-section">
+          <h3><i class="bi bi-cloud-sync-fill"></i> Sincronización en la Nube</h3>
+          <p>Los datos se sincronizan automáticamente. Tu ID de cuenta es:</p>
+          <div class="account-id-box" @click="copyAccountId">
+            <span class="account-id-text">{{ accountStore.accountData.accountId || 'Generando...' }}</span>
+            <i class="bi bi-clipboard"></i>
+          </div>
+          
+          <div class="cloud-restore-container">
+            <p><strong>¿Quieres recuperar datos desde otra cuenta?</strong></p>
+            <div class="input-group">
+              <input 
+                v-model="cloudIdInput"
+                type="text" 
+                placeholder="Pega un ID de cuenta aquí"
+                class="cloud-input"
+              />
+              <button @click="loadFromCloud" :disabled="!cloudIdInput || isCloudLoading" class="btn btn-primary">
+                <span v-if="isCloudLoading" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                <i v-else class="bi bi-cloud-arrow-down-fill"></i> Cargar
+              </button>
+            </div>
+          </div>
+        </div>
+
         <!-- Sección de Exportación -->
         <div class="account-section">
-          <h3><i class="bi bi-cloud-download-fill"></i> Exportar Datos</h3>
+          <h3><i class="bi bi-cloud-download-fill"></i> Exportar Datos (Local)</h3>
           <p>Guarda una copia de seguridad de todos tus personajes y configuraciones.</p>
           <button @click="exportData" class="btn btn-primary full-width">
             <i class="bi bi-download"></i> Descargar Copia de Seguridad
@@ -20,7 +46,7 @@
 
         <!-- Sección de Importación -->
         <div class="account-section">
-          <h3><i class="bi bi-cloud-upload-fill"></i> Importar Datos</h3>
+          <h3><i class="bi bi-cloud-upload-fill"></i> Importar Datos (Local)</h3>
           <p>Restaura tus datos desde un archivo de copia de seguridad. <strong>Esto reemplazará los datos actuales.</strong></p>
           
           <div class="file-upload-container">
@@ -74,6 +100,8 @@ const props = defineProps({
 const accountStore = useAccountStore();
 const importJson = ref('');
 const fileName = ref('');
+const cloudIdInput = ref('');
+const isCloudLoading = ref(false);
 
 onMounted(() => {
   document.body.classList.add('modal-open');
@@ -101,6 +129,61 @@ const handleFileUpload = (event) => {
     importJson.value = e.target.result;
   };
   reader.readAsText(file);
+};
+
+const copyAccountId = () => {
+  if (!accountStore.accountData.accountId) return;
+  navigator.clipboard.writeText(accountStore.accountData.accountId);
+  Swal.fire({
+    icon: 'success',
+    title: 'ID Copiado',
+    text: 'El ID de tu cuenta se ha copiado al portapapeles.',
+    timer: 1500,
+    showConfirmButton: false,
+    customClass: { container: 'high-z-index' }
+  });
+};
+
+const loadFromCloud = async () => {
+  if (!cloudIdInput.value) return;
+
+  Swal.fire({
+    title: '¿Cargar desde la nube?',
+    text: 'Esto reemplazará todos los datos actuales con los de la cuenta especificada.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#2ecc71',
+    cancelButtonColor: '#d33',
+    confirmButtonText: 'Sí, cargar datos',
+    cancelButtonText: 'Cancelar',
+    customClass: { container: 'high-z-index' },
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      isCloudLoading.value = true;
+      const { success, error } = await accountStore.loadFromGoogle(cloudIdInput.value.trim());
+      isCloudLoading.value = false;
+
+      if (success) {
+        Swal.fire({
+          title: '¡Cargado!',
+          text: 'Los datos se han descargado correctamente.',
+          icon: 'success',
+          customClass: { container: 'high-z-index' },
+          timer: 1500,
+          showConfirmButton: false
+        }).then(() => {
+          props.onClose();
+        });
+      } else {
+        Swal.fire({
+          title: 'Error',
+          text: error || 'No se pudieron recuperar los datos de la nube.',
+          icon: 'error',
+          customClass: { container: 'high-z-index' },
+        });
+      }
+    }
+  });
 };
 
 const exportData = () => {
@@ -406,5 +489,93 @@ const clearAllData = () => {
 .btn-danger {
   background: linear-gradient(135deg, #e74c3c, #c0392b);
   color: white;
+}
+
+.cloud-section {
+  border: 1px solid rgba(52, 152, 219, 0.3);
+  background: rgba(52, 152, 219, 0.05);
+}
+
+.cloud-section h3 {
+  color: #3498db;
+}
+
+.account-id-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 10px 15px;
+  border-radius: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  margin-bottom: 20px;
+  transition: all 0.2s ease;
+}
+
+.account-id-box:hover {
+  background: rgba(52, 152, 219, 0.1);
+  border-color: #3498db;
+}
+
+.account-id-text {
+  font-family: monospace;
+  font-size: 0.95rem;
+  color: #f1c40f;
+  word-break: break-all;
+}
+
+.account-id-box i {
+  color: #b9bbbe;
+  font-size: 1.1rem;
+}
+
+.account-id-box:hover i {
+  color: #3498db;
+}
+
+.cloud-restore-container p {
+  margin-bottom: 8px;
+  color: #e0e0e0;
+}
+
+.input-group {
+  display: flex;
+  gap: 10px;
+}
+
+.cloud-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f0f0f0;
+  padding: 10px 15px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.cloud-input:focus {
+  border-color: #3498db;
+}
+
+.input-group .btn {
+  flex-shrink: 0;
+}
+
+.spinner-border {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  vertical-align: text-bottom;
+  border: .2em solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spinner-border .75s linear infinite;
+}
+
+@keyframes spinner-border {
+  to { transform: rotate(360deg); }
 }
 </style>

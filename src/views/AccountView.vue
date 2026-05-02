@@ -20,6 +20,37 @@
         </div>
       </div>
 
+      <!-- Sección de Nube (Sincronización Automática) -->
+      <div class="account-section cloud-section">
+        <div class="section-header cloud-header">
+          <h2><i class="bi bi-cloud-sync-fill"></i> Sincronización en la Nube</h2>
+        </div>
+        <div class="section-content">
+          <p>Los datos se sincronizan automáticamente. Tu ID de cuenta es:</p>
+          <div class="account-id-box" @click="copyAccountId">
+            <span class="account-id-text">{{ accountStore.accountData.accountId || 'Generando...' }}</span>
+            <i class="bi bi-clipboard"></i>
+          </div>
+          
+          <div class="cloud-restore-container">
+            <p><strong>¿Quieres recuperar datos desde otra cuenta?</strong></p>
+            <div class="input-group">
+              <input 
+                v-model="cloudIdInput"
+                type="text" 
+                placeholder="Pega un ID de cuenta aquí"
+                class="cloud-input"
+              />
+              <button @click="loadFromCloud" :disabled="!cloudIdInput || isCloudLoading" class="btn btn-primary" style="width: auto;">
+                <span v-if="isCloudLoading" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                <i v-else class="bi bi-cloud-arrow-down-fill"></i>
+                <span>Cargar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Sección de Exportación -->
       <div class="account-section export-section">
         <div class="section-header">
@@ -93,6 +124,8 @@ import Swal from 'sweetalert2';
 const accountStore = useAccountStore();
 const importJson = ref('');
 const fileName = ref('');
+const cloudIdInput = ref('');
+const isCloudLoading = ref(false);
 
 const handleFileUpload = (event) => {
   const file = event.target.files[0];
@@ -104,6 +137,55 @@ const handleFileUpload = (event) => {
     importJson.value = e.target.result;
   };
   reader.readAsText(file);
+};
+
+const copyAccountId = () => {
+  if (!accountStore.accountData.accountId) return;
+  navigator.clipboard.writeText(accountStore.accountData.accountId);
+  Swal.fire({
+    icon: 'success',
+    title: 'ID Copiado',
+    text: 'El ID de tu cuenta se ha copiado al portapapeles.',
+    timer: 1500,
+    showConfirmButton: false
+  });
+};
+
+const loadFromCloud = async () => {
+  if (!cloudIdInput.value) return;
+
+  Swal.fire({
+    title: '¿Cargar desde la nube?',
+    text: 'Esto reemplazará todos los datos actuales con los de la cuenta especificada.',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#2ecc71',
+    cancelButtonColor: '#d33',
+    confirmButtonText: 'Sí, cargar datos',
+    cancelButtonText: 'Cancelar',
+  }).then(async (result) => {
+    if (result.isConfirmed) {
+      isCloudLoading.value = true;
+      const { success, error } = await accountStore.loadFromGoogle(cloudIdInput.value.trim());
+      isCloudLoading.value = false;
+
+      if (success) {
+        Swal.fire({
+          title: '¡Cargado!',
+          text: 'Los datos se han descargado correctamente.',
+          icon: 'success',
+          timer: 1500,
+          showConfirmButton: false
+        });
+      } else {
+        Swal.fire({
+          title: 'Error',
+          text: error || 'No se pudieron recuperar los datos de la nube.',
+          icon: 'error',
+        });
+      }
+    }
+  });
 };
 
 const exportData = () => {
@@ -486,6 +568,100 @@ const clearAllData = () => {
     gap: 8px;
     text-align: center;
     padding: 14px 10px;
+  }
+}
+
+/* ── Estilos de la Nube ─────────────────────────────────────────── */
+.cloud-header {
+  background: linear-gradient(135deg, #1abc9c, #16a085);
+  border-bottom-color: rgba(26, 188, 156, 0.3);
+}
+
+.account-id-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 15px 20px;
+  border-radius: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  margin-bottom: 25px;
+  transition: all 0.2s ease;
+}
+
+.account-id-box:hover {
+  background: rgba(26, 188, 156, 0.1);
+  border-color: #1abc9c;
+  transform: translateY(-2px);
+}
+
+.account-id-text {
+  font-family: monospace;
+  font-size: 1.05rem;
+  color: #f1c40f;
+  word-break: break-all;
+}
+
+.account-id-box i {
+  color: #b9bbbe;
+  font-size: 1.3rem;
+  transition: color 0.2s;
+}
+
+.account-id-box:hover i {
+  color: #1abc9c;
+}
+
+.cloud-restore-container p {
+  margin-bottom: 15px;
+}
+
+.input-group {
+  display: flex;
+  gap: 15px;
+}
+
+.cloud-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f0f0f0;
+  padding: 15px;
+  border-radius: 12px;
+  font-size: 1rem;
+  outline: none;
+  transition: all 0.3s ease;
+}
+
+.cloud-input:focus {
+  border-color: #1abc9c;
+  background: rgba(26, 188, 156, 0.05);
+}
+
+.spinner-border {
+  display: inline-block;
+  width: 1.2rem;
+  height: 1.2rem;
+  vertical-align: text-bottom;
+  border: .2em solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spinner-border .75s linear infinite;
+}
+
+@keyframes spinner-border {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+  .input-group {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .input-group .btn {
+    width: 100% !important;
   }
 }
 </style>

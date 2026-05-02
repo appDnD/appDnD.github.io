@@ -6,6 +6,7 @@ export const useAccountStore = defineStore('account', {
   state: () => ({
     accountData: {
       version: 2, // Bump version for new structure
+      accountId: null,
       characters: [],
       activeCharacterId: null,
       dm: null,
@@ -20,6 +21,7 @@ export const useAccountStore = defineStore('account', {
     // Indica si los datos han sido migrados
     migrationCompleted: false,
     isLoading: true,
+    _syncTimeout: null,
   }),
 
   getters: {
@@ -81,6 +83,11 @@ export const useAccountStore = defineStore('account', {
           this.accountData.activeCharacterId = chars[0].id;
           this.saveDataToLocalStorage();
         }
+
+        if (!this.accountData.accountId) {
+          this.accountData.accountId = uuidv4();
+          this.saveDataToLocalStorage();
+        }
       } catch (error) {
         console.error('Error al cargar o migrar los datos. Empezando con un estado limpio.', error);
         // Opcional: limpiar datos corruptos si se detecta un error
@@ -88,6 +95,10 @@ export const useAccountStore = defineStore('account', {
       } finally {
         this.migrationCompleted = true;
         this.isLoading = false;
+        // Forzar una sincronización inicial para asegurar que Google tenga los últimos datos
+        if (this.accountData && this.accountData.accountId) {
+          this.syncToGoogle();
+        }
       }
     },
 
@@ -99,6 +110,7 @@ export const useAccountStore = defineStore('account', {
     _migrateV1toV2(v1Data) {
       const v2Data = {
         version: 2,
+        accountId: uuidv4(),
         characters: [],
         activeCharacterId: null,
         dm: v1Data.dm || null,
@@ -261,9 +273,40 @@ export const useAccountStore = defineStore('account', {
     /**
      * Guarda el estado completo de `accountData` en localStorage.
      * Esta función se convertirá en el único punto de escritura a localStorage.
+     * @param {boolean} skipSync - Si es true, no sincroniza con Google Sheets
      */
-    saveDataToLocalStorage() {
+    saveDataToLocalStorage(skipSync = false) {
       localStorage.setItem('dnd-account-data', JSON.stringify(this.accountData));
+      if (!skipSync) {
+        this.syncToGoogle();
+      }
+    },
+
+    /**
+     * Sincroniza los datos con Google Sheets en segundo plano
+     */
+    syncToGoogle() {
+      if (this._syncTimeout) {
+        clearTimeout(this._syncTimeout);
+      }
+      this._syncTimeout = setTimeout(async () => {
+        if (!this.accountData.accountId) return;
+        try {
+          const payload = {
+            id_data: this.accountData.accountId,
+            json: this.accountData
+          };
+          await fetch('https://script.google.com/macros/s/AKfycbwyQcRLPKJY5-xqG6ocs8EAzbvy2CXj7Scx_rRR1mj7Q5satDkiQflebamu4YHXdlI3DA/exec', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'text/plain',
+            },
+            body: JSON.stringify(payload),
+          });
+        } catch (error) {
+          console.error("Error syncing to Google Sheets:", error);
+        }
+      }, 2000);
     },
 
     /**
@@ -308,6 +351,9 @@ export const useAccountStore = defineStore('account', {
         // Validación básica de la estructura
         if (newData && typeof newData === 'object' && 'version' in newData) {
           this.accountData = newData;
+          if (!this.accountData.accountId) {
+             this.accountData.accountId = uuidv4();
+          }
           this.saveDataToLocalStorage();
 
           // Forzar un refresco de la página para que todos los stores se recarguen
@@ -320,6 +366,31 @@ export const useAccountStore = defineStore('account', {
       } catch (error) {
         console.error('Error importando datos:', error);
         return { success: false, error: 'El archivo JSON no es válido.' };
+      }
+    },
+
+    /**
+     * Recupera datos desde la nube (Google Sheets)
+     */
+    async loadFromGoogle(accountId) {
+      try {
+        const response = await fetch(`https://script.google.com/macros/s/AKfycbwyQcRLPKJY5-xqG6ocs8EAzbvy2CXj7Scx_rRR1mj7Q5satDkiQflebamu4YHXdlI3DA/exec?id_data=${accountId}`);
+        const data = await response.json();
+        
+        if (data && data.status === 'not_found') {
+          return { success: false, error: 'No se encontró la cuenta en la nube.' };
+        } else if (data && data.version) {
+          this.accountData = data;
+          this.saveDataToLocalStorage();
+          window.location.reload();
+          return { success: true };
+        } else if (data && data.status === 'error') {
+          return { success: false, error: `Error del servidor: ${data.message}` };
+        }
+        return { success: false, error: 'Datos no válidos de la nube.' };
+      } catch (error) {
+        console.error("Error loading from Google:", error);
+        return { success: false, error: 'Error de conexión.' };
       }
     },
 

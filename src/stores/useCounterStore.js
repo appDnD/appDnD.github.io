@@ -9,7 +9,7 @@ export const useCounterStore = defineStore('counter', () => {
   const counters = ref([]);
 
   // --- Data Persistence ---
-  function saveData() {
+  function saveData(skipSync = false) {
     const accountStore = useAccountStore();
     const activeCharacterId = accountStore.accountData.activeCharacterId;
     if (!activeCharacterId) return;
@@ -17,7 +17,7 @@ export const useCounterStore = defineStore('counter', () => {
     const characterIndex = accountStore.accountData.characters.findIndex(c => c.id === activeCharacterId);
     if (characterIndex !== -1) {
       accountStore.accountData.characters[characterIndex].counters = counters.value;
-      accountStore.saveDataToLocalStorage();
+      accountStore.saveDataToLocalStorage(skipSync);
     }
   }
 
@@ -59,7 +59,7 @@ export const useCounterStore = defineStore('counter', () => {
     if (counter.max !== undefined) newValue = Math.min(newValue, counter.max);
     if (counter.min !== undefined) newValue = Math.max(newValue, counter.min);
     counter.value = newValue;
-    saveData();
+    saveData(true); // Omitimos la sincronización en la nube para acciones rápidas
   }
 
   function setCounterToMax(id) {
