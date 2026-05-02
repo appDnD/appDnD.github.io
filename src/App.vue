@@ -2,21 +2,76 @@
 import { onMounted, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import AppHeader from './components/AppHeader.vue';
+import Swal from 'sweetalert2';
 import { useAccountStore } from './stores/useAccountStore';
 import { useCharacterStore } from './stores/useCharacterStore';
 
 const accountStore = useAccountStore();
 const { isLoading } = storeToRefs(accountStore);
 
-onMounted(() => {
+onMounted(async () => {
+  // 1. Cargar datos locales de forma síncrona
   accountStore.loadInitialData();
-});
 
-watch(isLoading, (loading) => {
-  if (!loading) {
-    const characterStore = useCharacterStore();
-    characterStore.loadAllCharacterData();
+  // 2. Comprobar si es un usuario nuevo (no tiene ID asignado)
+  if (!accountStore.accountData.accountId) {
+    const { value: username } = await Swal.fire({
+      title: '¡Bienvenido a DyD!',
+      html: '<p>Por favor, elige un <b>nombre de usuario</b> único. Este será tu ID para sincronizar y recuperar datos en la nube.</p><p style="font-size: 0.85em; color: #b9bbbe;">Si ya tienes una cuenta en la nube, introduce aquí mismo tu nombre de usuario para recuperarla.</p>',
+      input: 'text',
+      inputPlaceholder: 'Ej: aventurero-123',
+      allowOutsideClick: false,
+      allowEscapeKey: false,
+      confirmButtonColor: '#3498db',
+      confirmButtonText: 'Entrar',
+      customClass: { container: 'high-z-index' },
+      inputValidator: (value) => {
+        if (!value) {
+          return '¡Necesitas un nombre de usuario!';
+        }
+        if (value.length < 3) {
+          return 'El nombre debe tener al menos 3 caracteres.';
+        }
+      }
+    });
+    
+    if (username) {
+      const formattedId = username.trim().toLowerCase().replace(/\s+/g, '-');
+      
+      Swal.fire({
+        title: 'Conectando con la nube...',
+        text: 'Comprobando si tu usuario ya existe...',
+        allowOutsideClick: false,
+        didOpen: () => { Swal.showLoading(); },
+        customClass: { container: 'high-z-index' }
+      });
+
+      // Intentamos cargar de Google a ver si ya existía ese nombre
+      const { success } = await accountStore.loadFromGoogle(formattedId);
+      
+      if (success) {
+        // Si success es true, loadFromGoogle hace un reload y recarga la página con los datos.
+        return;
+      } else {
+        // Si no existe en la nube o hay error de conexión, asumimos que es una cuenta nueva y la creamos.
+        accountStore.accountData.accountId = formattedId;
+        accountStore.saveDataToLocalStorage();
+        
+        Swal.fire({
+          icon: 'success',
+          title: '¡Cuenta creada!',
+          text: `Tu ID de usuario es: ${formattedId}`,
+          timer: 3000,
+          showConfirmButton: false,
+          customClass: { container: 'high-z-index' }
+        });
+      }
+    }
   }
+
+  // 3. Una vez que el ID está asegurado o cargado, inicializamos los demás stores
+  const characterStore = useCharacterStore();
+  characterStore.loadAllCharacterData();
 });
 </script>
 

@@ -83,11 +83,6 @@ export const useAccountStore = defineStore('account', {
           this.accountData.activeCharacterId = chars[0].id;
           this.saveDataToLocalStorage();
         }
-
-        if (!this.accountData.accountId) {
-          this.accountData.accountId = uuidv4();
-          this.saveDataToLocalStorage();
-        }
       } catch (error) {
         console.error('Error al cargar o migrar los datos. Empezando con un estado limpio.', error);
         // Opcional: limpiar datos corruptos si se detecta un error
@@ -110,7 +105,7 @@ export const useAccountStore = defineStore('account', {
     _migrateV1toV2(v1Data) {
       const v2Data = {
         version: 2,
-        accountId: uuidv4(),
+        accountId: null,
         characters: [],
         activeCharacterId: null,
         dm: v1Data.dm || null,
