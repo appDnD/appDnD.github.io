@@ -72,6 +72,15 @@ export const useAccountStore = defineStore('account', {
             this.accountData = dataToProcess;
           }
         }
+
+        // Auto-seleccionar el primer personaje si hay personajes pero ninguno activo
+        const chars = this.accountData.characters;
+        const activeId = this.accountData.activeCharacterId;
+        const activeExists = activeId && chars.some(c => c.id === activeId);
+        if (!activeExists && chars && chars.length > 0) {
+          this.accountData.activeCharacterId = chars[0].id;
+          this.saveDataToLocalStorage();
+        }
       } catch (error) {
         console.error('Error al cargar o migrar los datos. Empezando con un estado limpio.', error);
         // Opcional: limpiar datos corruptos si se detecta un error

@@ -10,6 +10,6 @@ import CharacterManager from '@/components/CharacterManager.vue';
 
 <style scoped>
 .character-manager-view {
-  padding: 20px;
+  padding: 0;
 }
 </style>

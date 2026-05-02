@@ -71,11 +71,14 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCharacterStore } from '../stores/useCharacterStore'
+import { useAccountStore } from '../stores/useAccountStore'
+import { v4 as uuidv4 } from 'uuid'
 import Swal from 'sweetalert2'
 import CharacterStateManager from '../components/CharacterStateManager.vue'
 
 const router = useRouter()
 const characterStore = useCharacterStore()
+const accountStore = useAccountStore()
 
 const characterName = ref('')
 const maxHp = ref(50)
@@ -106,6 +109,27 @@ const saveConfiguration = () => {
   }
   
   try {
+    // Si no hay personaje activo (venimos del menú sin pasar por el gestor),
+    // creamos un nuevo personaje en el store antes de configurarlo.
+    if (!accountStore.accountData.activeCharacterId) {
+      const newCharacterId = uuidv4()
+      const newCharacter = {
+        id: newCharacterId,
+        characterData: {
+          character: { isConfigured: false, name: '' },
+          turn: { current: 0, isActive: false },
+          logs: [],
+        },
+        attacks: [],
+        passiveDamages: [],
+        counters: [],
+        characterState: [],
+      }
+      accountStore.accountData.characters.push(newCharacter)
+      accountStore.accountData.activeCharacterId = newCharacterId
+      accountStore.saveDataToLocalStorage()
+    }
+
     characterStore.configureCharacter(
       characterName.value.trim(),
       maxHp.value,

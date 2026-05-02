@@ -30,6 +30,11 @@
         </div>
         
         <div class="action-buttons">
+          <button v-if="isActiveCharacterLoaded" @click="goToCharacter" class="btn btn-info">
+            <span class="btn-icon">👤</span>
+            <span class="btn-text">Ver Personaje</span>
+          </button>
+
           <button @click="startNewCharacter" class="btn btn-primary">
             <span class="btn-icon">✨</span>
             <span class="btn-text">Crear Nuevo Personaje</span>
@@ -61,9 +66,17 @@ const accountStore = useAccountStore();
 const characters = computed(() => accountStore.characters);
 const isDataLoading = computed(() => accountStore.isDataLoading);
 const hasExistingCharacters = computed(() => characters.value && characters.value.length > 0);
+const isActiveCharacterLoaded = computed(() => {
+  const activeId = accountStore.accountData.activeCharacterId;
+  return activeId && characters.value.some(c => c.id === activeId);
+});
 
 const startNewCharacter = () => {
   router.push('/config');
+};
+
+const goToCharacter = () => {
+  router.push('/character');
 };
 
 const manageCharacters = () => {

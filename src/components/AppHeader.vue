@@ -74,11 +74,17 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useCharacterStore } from '../stores/useCharacterStore'
+import { useAccountStore } from '../stores/useAccountStore'
 
 const characterStore = useCharacterStore()
+const accountStore = useAccountStore()
 const isMobileMenuOpen = ref(false)
 
-const hasCharacter = computed(() => characterStore.character.isConfigured)
+const hasCharacter = computed(() => {
+  const activeId = accountStore.accountData.activeCharacterId
+  if (!activeId) return false
+  return accountStore.accountData.characters.some(c => c.id === activeId)
+})
 
 const toggleMobileMenu = () => {
   isMobileMenuOpen.value = !isMobileMenuOpen.value

@@ -240,6 +240,7 @@ const importCharacter = () => {
   display: flex;
   align-items: center;
   gap: 12px;
+  white-space: nowrap;
 }
 
 .section-content {
@@ -264,6 +265,7 @@ const importCharacter = () => {
   border-radius: 12px;
   border: 1px solid transparent;
   transition: all 0.3s ease;
+  gap: 16px;
 }
 
 .character-item:hover {
@@ -283,21 +285,28 @@ const importCharacter = () => {
   align-items: center;
   gap: 15px;
   color: #ecf0f1;
+  min-width: 0;
+  flex: 1;
 }
 
 .character-icon {
   font-size: 1.8rem;
   color: #c792ea;
+  flex-shrink: 0;
 }
 
 .character-name {
   font-size: 1.1rem;
   font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .character-actions {
   display: flex;
   gap: 10px;
+  flex-shrink: 0;
 }
 
 .no-characters-message {
@@ -309,6 +318,7 @@ const importCharacter = () => {
 .no-characters-message i {
   font-size: 3rem;
   color: #6f42c2;
+  display: block;
   margin-bottom: 15px;
 }
 
@@ -335,11 +345,17 @@ const importCharacter = () => {
   cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  white-space: nowrap;
 }
 
 .btn:hover:not(:disabled) {
   transform: translateY(-3px);
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn-sm {
@@ -349,7 +365,8 @@ const importCharacter = () => {
 }
 
 .btn i {
-  font-size: 1.2em;
+  font-size: 1.1em;
+  flex-shrink: 0;
 }
 
 .btn-primary { background: linear-gradient(135deg, #3498db, #2980b9); color: white; }
@@ -357,4 +374,107 @@ const importCharacter = () => {
 .btn-danger { background: linear-gradient(135deg, #e74c3c, #c0392b); color: white; }
 .btn-success { background: linear-gradient(135deg, #2ecc71, #27ae60); color: white; }
 .btn-info { background: linear-gradient(135deg, #5dade2, #3498db); color: white; }
+
+/* ── Responsive ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .manager-container {
+    padding: 16px 12px;
+  }
+
+  .manager-header {
+    padding: 18px 16px;
+    margin-bottom: 24px;
+    border-radius: 16px;
+  }
+
+  .manager-header h1 {
+    font-size: 1.6rem;
+    gap: 10px;
+  }
+
+  .manager-subtitle {
+    font-size: 0.9rem;
+  }
+
+  .manager-section {
+    border-radius: 16px;
+    margin-bottom: 20px;
+  }
+
+  .section-header {
+    padding: 14px 18px;
+  }
+
+  .section-header h2 {
+    font-size: 1.15rem;
+    gap: 10px;
+  }
+
+  .section-content {
+    padding: 16px;
+  }
+
+  /* Stack character name above buttons */
+  .character-item {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 14px 16px;
+    gap: 12px;
+  }
+
+  .character-item:hover {
+    transform: none;
+  }
+
+  .character-info {
+    width: 100%;
+  }
+
+  .character-name {
+    font-size: 1.05rem;
+  }
+
+  /* Action buttons span full width, equally spaced */
+  .character-actions {
+    width: 100%;
+    gap: 8px;
+  }
+
+  .character-actions .btn-sm {
+    flex: 1;
+    padding: 9px 8px;
+    font-size: 0.82rem;
+    gap: 6px;
+    justify-content: center;
+  }
+
+  /* Action section: single column */
+  .action-buttons {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .btn {
+    padding: 14px 18px;
+    font-size: 0.97rem;
+    min-height: 50px;
+  }
+}
+
+@media (max-width: 400px) {
+  .character-actions .btn-sm span {
+    display: none; /* icon-only on very small screens */
+  }
+
+  .character-actions .btn-sm {
+    padding: 10px;
+    flex: unset;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .character-actions {
+    gap: 8px;
+  }
+}
 </style>

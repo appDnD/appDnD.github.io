@@ -254,6 +254,8 @@ const clearAllData = () => {
   display: flex;
   align-items: center;
   gap: 12px;
+  white-space: nowrap;
+  flex-wrap: nowrap;
 }
 
 .danger-header {
@@ -309,6 +311,7 @@ const clearAllData = () => {
 
 .file-upload-label i {
   font-size: 1.5rem;
+  flex-shrink: 0;
 }
 
 .preview-section {
@@ -343,6 +346,7 @@ const clearAllData = () => {
   transition: all 0.3s ease;
   width: 100%;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  text-decoration: none;
 }
 
 .btn:hover:not(:disabled) {
@@ -391,63 +395,97 @@ const clearAllData = () => {
   background: linear-gradient(135deg, #ec7063, #e74c3c);
 }
 
-/* Responsive */
+/* ── Responsive ─────────────────────────────────────────── */
 @media (max-width: 768px) {
   .account-view-container {
-    padding: 20px 15px;
+    padding: 16px 12px;
   }
 
   .account-header {
-    padding: 20px 15px;
-    margin-bottom: 30px;
+    padding: 18px 16px;
+    margin-bottom: 24px;
+    border-radius: 16px;
   }
 
   .account-header h1 {
-    font-size: 2rem;
-    flex-direction: column;
+    font-size: 1.6rem;
     gap: 10px;
   }
 
   .account-subtitle {
-    font-size: 1rem;
+    font-size: 0.9rem;
   }
 
   .account-sections {
-    gap: 20px;
+    gap: 16px;
+  }
+
+  .account-section {
+    border-radius: 16px;
+  }
+
+  .account-section:hover {
+    transform: none;
   }
 
   .section-header {
-    padding: 15px 20px;
+    padding: 14px 18px;
   }
 
   .section-header h2 {
-    font-size: 1.3rem;
+    font-size: 1.1rem;
+    gap: 10px;
   }
 
   .section-content {
-    padding: 20px;
+    padding: 18px 16px;
+  }
+
+  .section-content p {
+    font-size: 0.92rem;
+    margin-bottom: 16px;
+  }
+
+  .file-upload-label {
+    padding: 16px 12px;
+    font-size: 0.92rem;
+    gap: 10px;
+    flex-direction: row;
+  }
+
+  .file-upload-label i {
+    font-size: 1.3rem;
   }
 
   .btn {
-    padding: 14px 24px;
-    font-size: 1rem;
+    padding: 14px 20px;
+    font-size: 0.97rem;
+    min-height: 50px;
   }
 }
 
 @media (max-width: 480px) {
+  .account-view-container {
+    padding: 12px 10px;
+  }
+
   .account-header h1 {
-    font-size: 1.7rem;
+    font-size: 1.4rem;
   }
 
   .section-header h2 {
-    font-size: 1.2rem;
-    flex-direction: column;
-    gap: 8px;
+    font-size: 1rem;
+  }
+
+  .section-content {
+    padding: 14px 12px;
   }
 
   .file-upload-label {
     flex-direction: column;
-    padding: 15px;
+    gap: 8px;
+    text-align: center;
+    padding: 14px 10px;
   }
 }
 </style>
