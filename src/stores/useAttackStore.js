@@ -27,6 +27,11 @@ export const useAttackStore = defineStore('attack', {
         this.attacks = (activeCharacter.attacks || []).map(attack => ({
           ...attack,
           id: attack.id || uuidv4(),
+          description: attack.description || '',
+          isSpell: attack.isSpell || false,
+          spellLevel: attack.spellLevel || 0,
+          spellComponents: attack.spellComponents || [],
+          materialComponents: attack.materialComponents || '',
           rerollDice: attack.rerollDice || [],
           damageRolls: (attack.damageRolls || []).map(roll => ({
             ...roll,

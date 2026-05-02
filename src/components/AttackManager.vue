@@ -10,16 +10,57 @@
       </div>
 
       <div class="content">
+        <!-- Filtros y Búsqueda -->
+        <div class="filters-bar">
+          <div class="search-input-wrapper">
+            <i class="bi bi-search"></i>
+            <input 
+              type="text" 
+              v-model="searchQuery" 
+              placeholder="Buscar ataque o hechizo..."
+              class="search-input"
+            >
+            <button v-if="searchQuery" @click="searchQuery = ''" class="clear-search-btn">
+              <i class="bi bi-x-circle-fill"></i>
+            </button>
+          </div>
+          
+          <div class="filter-select-wrapper">
+            <i class="bi bi-filter"></i>
+            <select v-model="levelFilter" class="filter-select">
+              <option value="all">Todos los niveles</option>
+              <option v-for="level in 10" :key="level-1" :value="level-1">
+                Nivel {{ level - 1 }}
+              </option>
+            </select>
+          </div>
+        </div>
+
         <!-- Lista de ataques -->
         <div class="attacks-list">
-          <div v-if="attackStore.attacks.length === 0" class="no-attacks">
-            No hay ataques guardados. ¡Crea uno nuevo!
+          <div v-if="filteredAttacks.length === 0" class="no-attacks">
+            <template v-if="isFiltered">
+              No hay ataques que coincidan con los filtros.
+            </template>
+            <template v-else>
+              No hay ataques guardados. ¡Crea uno nuevo!
+            </template>
           </div>
-          <div v-for="attack in attackStore.attacks" :key="attack.id" class="attack-item" :data-id="attack.id">
+          <div v-for="attack in filteredAttacks" :key="attack.id" class="attack-item" :data-id="attack.id">
             <div class="header-attack">
-              <div class="drag-handle"><i class="bi bi-grip-vertical"></i></div>
+              <div :class="['drag-handle', { 'drag-disabled': isFiltered }]" :title="isFiltered ? 'Ordenación deshabilitada con filtros' : ''">
+                <i class="bi bi-grip-vertical"></i>
+              </div>
               <div class="attack-info">
-                <span class="attack-name">{{ attack.name }}</span>
+                <div class="attack-name-container">
+                  <span class="attack-name">{{ attack.name }}</span>
+                  <span v-if="attack.isSpell" class="spell-badge" :title="'Nivel ' + attack.spellLevel">
+                    <i class="bi bi-magic"></i> Lvl {{ attack.spellLevel }}
+                  </span>
+                </div>
+                <div v-if="attack.description" class="attack-description-preview">
+                  {{ attack.description }}
+                </div>
                 <div class="attack-summary">
                   <span v-for="(roll, index) in attack.damageRolls" :key="index" class="damage-tag">
                     {{ roll.dice }} {{ roll.type }}
@@ -79,6 +120,73 @@
                   placeholder="Ej: Espadazo flamígero"
                   autocomplete="off"
                 >
+              </div>
+
+              <!-- Descripción -->
+              <div class="form-group">
+                <label for="attack-description">Descripción</label>
+                <textarea 
+                  id="attack-description"
+                  v-model="currentAttack.description" 
+                  placeholder="Escribe una descripción del ataque o hechizo..."
+                  rows="3"
+                  class="form-textarea"
+                ></textarea>
+              </div>
+
+              <!-- ¿Es Hechizo? -->
+              <div class="form-group checkbox-group">
+                <label class="checkbox-container">
+                  <input type="checkbox" v-model="currentAttack.isSpell">
+                  <span class="checkmark"></span>
+                  ¿Es Hechizo?
+                </label>
+              </div>
+
+              <!-- Campos de Hechizo (Condicionales) -->
+              <div v-if="currentAttack.isSpell" class="spell-fields-container">
+                <div class="form-group">
+                  <label for="spell-level">Nivel del Hechizo</label>
+                  <input 
+                    id="spell-level"
+                    type="number" 
+                    v-model.number="currentAttack.spellLevel" 
+                    min="0" 
+                    max="9"
+                  >
+                </div>
+
+                <div class="form-group">
+                  <label>Componentes</label>
+                  <div class="components-checkboxes">
+                    <label class="checkbox-container inline">
+                      <input type="checkbox" value="Verbal" v-model="currentAttack.spellComponents">
+                      <span class="checkmark"></span>
+                      Verbal
+                    </label>
+                    <label class="checkbox-container inline">
+                      <input type="checkbox" value="Somático" v-model="currentAttack.spellComponents">
+                      <span class="checkmark"></span>
+                      Somático
+                    </label>
+                    <label class="checkbox-container inline">
+                      <input type="checkbox" value="Material" v-model="currentAttack.spellComponents">
+                      <span class="checkmark"></span>
+                      Material
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Detalles de componentes materiales -->
+                <div v-if="currentAttack.spellComponents.includes('Material')" class="form-group">
+                  <label for="material-components">Especificar Componentes Materiales</label>
+                  <input 
+                    id="material-components"
+                    type="text" 
+                    v-model="currentAttack.materialComponents" 
+                    placeholder="Ej: Una pizca de azufre..."
+                  >
+                </div>
               </div>
 
               <!-- Tiradas de daño -->
@@ -292,7 +400,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, reactive, nextTick, computed } from 'vue';
+import { ref, onMounted, onUnmounted, reactive, nextTick, computed, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import Sortable from 'sortablejs';
 import { useAttackStore } from '../stores/useAttackStore';
@@ -324,10 +432,41 @@ const dadBonusDamage = computed(() => {
   return calculateDadBonus(criticalHitConfig.characterLevel);
 });
 
+// --- Filtros y Búsqueda ---
+const searchQuery = ref('');
+const levelFilter = ref('all');
+
+const filteredAttacks = computed(() => {
+  let list = attackStore.attacks;
+  
+  // Filtro por nombre
+  if (searchQuery.value) {
+    const query = searchQuery.value.toLowerCase().trim();
+    list = list.filter(a => a.name.toLowerCase().includes(query));
+  }
+  
+  // Filtro por nivel de hechizo
+  if (levelFilter.value !== 'all') {
+    const level = parseInt(levelFilter.value);
+    list = list.filter(a => a.isSpell && a.spellLevel === level);
+  }
+  
+  return list;
+});
+
+const isFiltered = computed(() => {
+  return searchQuery.value.trim() !== '' || levelFilter.value !== 'all';
+});
+
 // Estructura del ataque reactiva
 const currentAttack = reactive({
   id: null,
   name: '',
+  description: '',
+  isSpell: false,
+  spellLevel: 0,
+  spellComponents: [],
+  materialComponents: '',
   damageRolls: [],
   rerollDice: [],
 });
@@ -340,17 +479,22 @@ onMounted(() => {
   nextTick(() => {
     const listEl = document.querySelector('.attacks-list');
     if (listEl) {
-      new Sortable(listEl, {
+      const sortable = new Sortable(listEl, {
         animation: 150,
         handle: '.drag-handle',
         ghostClass: 'sortable-ghost',
         onEnd: (evt) => {
           const newOrder = Array.from(evt.target.children)
                                 .map(el => el.dataset.id)
-                                .filter(id => id); // Filtrar elementos sin data-id
+                                .filter(id => id);
           attackStore.updateAttackOrder(newOrder);
         }
       });
+
+      // Habilitar/Deshabilitar según si hay filtros activos
+      watch(isFiltered, (val) => {
+        sortable.option('disabled', val);
+      }, { immediate: true });
     }
 
     // Redirigir el scroll del overlay al contenido del modal principal
@@ -424,6 +568,11 @@ const setupForm = (attack) => {
   // Rellenar el formulario de forma reactiva para evitar problemas
   currentAttack.id = attackCopy.id;
   currentAttack.name = attackCopy.name;
+  currentAttack.description = attackCopy.description || '';
+  currentAttack.isSpell = attackCopy.isSpell || false;
+  currentAttack.spellLevel = attackCopy.spellLevel || 0;
+  currentAttack.spellComponents = attackCopy.spellComponents || [];
+  currentAttack.materialComponents = attackCopy.materialComponents || '';
 
   // Limpiar y rellenar los arrays para mantener la reactividad
   currentAttack.damageRolls.splice(0, currentAttack.damageRolls.length, ...attackCopy.damageRolls);
@@ -457,6 +606,11 @@ const showAttackForm = () => {
   const newAttackBase = {
     id: null,
     name: '',
+    description: '',
+    isSpell: false,
+    spellLevel: 0,
+    spellComponents: [],
+    materialComponents: '',
     damageRolls: [
       {
         dice: '1d6',
@@ -813,12 +967,14 @@ const executeAndShowAttack = (attack, isCritical = false) => {
   left: 0;
   width: 100%;
   height: 100%;
+  height: 100dvh;
   background-color: rgba(0, 0, 0, 0.7);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
   padding: 20px;
+  box-sizing: border-box;
 }
 
 .attack-manager-container {
@@ -827,9 +983,12 @@ const executeAndShowAttack = (attack, isCritical = false) => {
   width: 90%;
   max-width: 800px;
   height: 80vh;
+  height: 80dvh;
+  max-height: calc(100dvh - 40px);
   display: flex;
   flex-direction: column;
   box-shadow: 0 5px 25px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
 }
 
 .header {
@@ -840,6 +999,11 @@ const executeAndShowAttack = (attack, isCritical = false) => {
   align-items: center;
   border-bottom: 1px solid #99aab5;
   border-radius: 12px 12px 0 0;
+  /* Siempre visible aunque se haga scroll */
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .header h2 {
@@ -906,11 +1070,120 @@ const executeAndShowAttack = (attack, isCritical = false) => {
   min-width: 0; /* Permite que el contenido se ajuste correctamente */
 }
 
+/* Filtros y Búsqueda */
+.filters-bar {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+  background: #23272a;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #444;
+}
+
+.search-input-wrapper {
+  position: relative;
+  flex-grow: 2;
+  display: flex;
+  align-items: center;
+}
+
+.search-input-wrapper i {
+  position: absolute;
+  left: 12px;
+  color: #72767d;
+}
+
+.search-input {
+  width: 100%;
+  padding: 8px 35px 8px 35px;
+  background: #1a1d21;
+  border: 1px solid #3a3f44;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 0.9rem;
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: #72767d;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.clear-search-btn:hover {
+  color: #ffffff;
+}
+
+.filter-select-wrapper {
+  position: relative;
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+}
+
+.filter-select-wrapper i {
+  position: absolute;
+  left: 12px;
+  color: #72767d;
+}
+
+.filter-select {
+  width: 100%;
+  padding: 8px 12px 8px 35px;
+  background: #1a1d21;
+  border: 1px solid #3a3f44;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 0.9rem;
+  appearance: none;
+}
+
+.drag-disabled {
+  opacity: 0.3;
+  cursor: not-allowed !important;
+}
+
 .attack-name {
   color: #ffffff;
   font-size: 1.2rem;
   font-weight: bold;
+}
+
+.attack-name-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.spell-badge {
+  background: linear-gradient(135deg, #9b59b6, #8e44ad);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.attack-description-preview {
+  color: #b9bbbe;
+  font-size: 0.85rem;
   margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+  font-style: italic;
 }
 
 /* Acciones del ataque */
@@ -1171,10 +1444,109 @@ const executeAndShowAttack = (attack, isCritical = false) => {
 }
 
 .form-group input:focus,
-.form-group select:focus {
+.form-group select:focus,
+.form-group textarea:focus {
   outline: none;
   border-color: #7289da;
   box-shadow: 0 0 0 3px rgba(114, 137, 218, 0.1);
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 12px;
+  background: #1a1d21;
+  border: 1px solid #3a3f44;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 0.95rem;
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Checkbox Moderno */
+.checkbox-group {
+  margin-top: 10px;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  position: relative;
+  padding-left: 35px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #ffffff;
+  user-select: none;
+}
+
+.checkbox-container.inline {
+  display: inline-flex;
+  margin-right: 20px;
+}
+
+.checkbox-container input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkmark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 24px;
+  width: 24px;
+  background-color: #1a1d21;
+  border: 2px solid #3a3f44;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.checkbox-container:hover input ~ .checkmark {
+  border-color: #7289da;
+}
+
+.checkbox-container input:checked ~ .checkmark {
+  background-color: #7289da;
+  border-color: #7289da;
+}
+
+.checkmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+}
+
+.checkbox-container input:checked ~ .checkmark:after {
+  display: block;
+}
+
+.checkbox-container .checkmark:after {
+  left: 8px;
+  top: 4px;
+  width: 6px;
+  height: 12px;
+  border: solid white;
+  border-width: 0 3px 3px 0;
+  transform: rotate(45deg);
+}
+
+.spell-fields-container {
+  background: rgba(114, 137, 218, 0.05);
+  padding: 20px;
+  border-radius: 10px;
+  border: 1px dashed rgba(114, 137, 218, 0.3);
+  margin-bottom: 25px;
+}
+
+.components-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 5px;
 }
 
 .damage-rolls-section {
@@ -1437,9 +1809,20 @@ const executeAndShowAttack = (attack, isCritical = false) => {
 
 /* Media Queries for Responsiveness */
 @media (max-width: 768px) {
+  .attack-manager-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
   .attack-manager-container {
-    width: 95%;
-    height: 85vh;
+    width: 100%;
+    height: 92dvh;
+    max-height: 92dvh;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .header {
+    border-radius: 16px 16px 0 0;
   }
 
   .attack-form-overlay {
@@ -1536,10 +1919,33 @@ const executeAndShowAttack = (attack, isCritical = false) => {
 }
 
 @media (max-width: 480px) {
+  .attack-manager-overlay {
+    padding: 0;
+    align-items: flex-end;
+  }
+
   .attack-manager-container {
     width: 100%;
-    height: 100vh;
-    border-radius: 0;
+    height: 95dvh;
+    max-height: 95dvh;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .header {
+    border-radius: 16px 16px 0 0;
+    padding: 12px 15px;
+  }
+
+  .filters-bar {
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px;
+    margin-bottom: 12px;
+  }
+
+  .search-input-wrapper,
+  .filter-select-wrapper {
+    width: 100%;
   }
 
   .attack-form-overlay {
