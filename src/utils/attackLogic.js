@@ -33,13 +33,24 @@ export function executeAttack(attack) {
     const lifeStealPercentage = Number(lifeSteal.percentage) || 0;
     const diceType = `d${dice.split('d')[1]}`;
 
+    const diceSize = Number(dice.split('d')[1]);
+    const rerollMax = Number(attack.rerollMax) || 0;
+    const useRerollMax = attack.useRerollMax || false;
+
     const currentRolls = rollDice(dice);
-    const appliedMinRolls = currentRolls.map(roll => ({
-        value: Math.max(roll, min),
-        diceType: diceType,
-        originalValue: roll,
-        isReplaced: false
-    }));
+    const appliedMinRolls = currentRolls.map(roll => {
+        return {
+            value: Math.max(roll, min),
+            diceType: diceType,
+            originalValue: roll,
+            rerollMax: rerollMax,
+            diceSize: diceSize,
+            min: min,
+            canReroll: useRerollMax && roll <= rerollMax,
+            rerolled: false,
+            isReplaced: false
+        };
+    });
 
     const rollSum = appliedMinRolls.reduce((sum, roll) => sum + roll.value, 0);
     const damageRollTotal = rollSum + bonus;
@@ -115,18 +126,36 @@ export function executeCriticalAttack(attack, criticalConfig) {
       bonus = Number(bonus) || 0;
       const lifeStealPercentage = Number(lifeSteal.percentage) || 0;
 
+      const rerollMax = Number(attack.rerollMax) || 0;
+      const useRerollMax = attack.useRerollMax || false;
+
       // Cada dado hace su daño máximo + una tirada aleatoria, mostrados por separado
       let rollSum = 0;
       const rolls = [];
       for (let i = 0; i < numDice; i++) {
-        const randomRollValue = Math.max(Math.floor(Math.random() * diceSize) + 1, min);
+        let firstRoll = Math.floor(Math.random() * diceSize) + 1;
+        let randomRollValue = firstRoll;
+        let rerolled = false;
+        let rerollValue = null;
+
+        const canReroll = useRerollMax && randomRollValue <= rerollMax;
+
+        randomRollValue = Math.max(randomRollValue, min);
         const maxRollValue = diceSize;
 
         rollSum += maxRollValue + randomRollValue;
 
         // Añadir el valor máximo y la tirada aleatoria como tiradas separadas para el desglose
-        rolls.push({ value: maxRollValue, originalValue: `${diceSize} (Máx)` });
-        rolls.push({ value: randomRollValue, originalValue: `${randomRollValue} (Aleatorio)` });
+        rolls.push({ value: maxRollValue, originalValue: maxRollValue });
+        rolls.push({ 
+            value: randomRollValue, 
+            originalValue: firstRoll,
+            canReroll: canReroll,
+            rerollMax: rerollMax,
+            diceSize: diceSize,
+            min: min,
+            rerolled: false
+        });
       }
 
       const damageRollTotal = rollSum + bonus;
@@ -199,8 +228,19 @@ export function rollRerollDice(rerollDiceConf) {
   rerollDiceConf.forEach(reroll => {
     const diceType = `d${reroll.dice.split('d')[1]}`;
     const min = Number(reroll.min) || 1;
+    const diceSize = Number(reroll.dice.split('d')[1]);
+    const rerollMax = Number(reroll.rerollMax) || 0;
+    const useRerollMax = reroll.useRerollMax || false;
+
     const rolls = rollDice(reroll.dice);
-    const appliedMinRolls = rolls.map(roll => Math.max(roll, min));
+    const appliedMinRolls = rolls.map(roll => {
+        let finalValue = roll;
+        if (useRerollMax && roll <= rerollMax) {
+            const newRoll = Math.floor(Math.random() * diceSize) + 1;
+            finalValue = Math.max(roll, newRoll);
+        }
+        return Math.max(finalValue, min);
+    });
 
     if (!rerollResults[diceType]) {
       rerollResults[diceType] = [];
@@ -280,3 +320,4 @@ export function replaceDice(attackResults, rerollResults) {
 
   return updatedResults;
 }
+

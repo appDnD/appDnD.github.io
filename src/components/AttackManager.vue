@@ -111,16 +111,16 @@
 
             <div class="attack-form-content">
               <!-- Nombre del ataque -->
-              <div class="form-group">
-                <label for="attack-name">Nombre del Ataque</label>
-                <input 
-                  id="attack-name"
-                  type="text" 
-                  v-model="currentAttack.name" 
-                  placeholder="Ej: Espadazo flamígero"
-                  autocomplete="off"
-                >
-              </div>
+                <div class="form-group">
+                  <label for="attack-name">Nombre del Ataque</label>
+                  <input 
+                    id="attack-name" 
+                    type="text" 
+                    v-model="currentAttack.name" 
+                    placeholder="Ej: Espadazo flamígero"
+                    autocomplete="off"
+                  >
+                </div>
 
               <!-- Descripción -->
               <div class="form-group">
@@ -329,6 +329,29 @@
                 <button @click="addRerollDice" class="btn-add-roll">
                   <i class="bi bi-plus-circle"></i> Añadir Dado de Reroll
                 </button>
+              </div>
+
+              <!-- Regla Especial: Reroll si <= N -->
+              <div class="damage-rolls-section special-rule-section">
+                <h4><i class="bi bi-magic"></i> Reglas Especiales de Dados</h4>
+                <div class="special-rule-item">
+                  <label class="checkbox-container">
+                    <input type="checkbox" v-model="currentAttack.useRerollMax">
+                    <span class="checkmark"></span>
+                    Relanzar (Reroll) si el resultado es &le;
+                  </label>
+                  <transition name="fade">
+                    <div v-if="currentAttack.useRerollMax" class="special-rule-input">
+                      <input 
+                        type="number" 
+                        v-model.number="currentAttack.rerollMax" 
+                        placeholder="1"
+                        min="1"
+                        class="input-small"
+                      >
+                    </div>
+                  </transition>
+                </div>
               </div>
 
               <!-- Acciones del formulario -->
@@ -546,6 +569,10 @@ const parseDiceString = (diceString) => {
 const setupForm = (attack) => {
   const attackCopy = JSON.parse(JSON.stringify(attack));
 
+  // Cargar configuración global de reroll
+  currentAttack.useRerollMax = attackCopy.useRerollMax || false;
+  currentAttack.rerollMax = attackCopy.rerollMax || 1;
+
   attackCopy.damageRolls.forEach(roll => {
     const { numDice, diceType } = parseDiceString(roll.dice);
     roll.numDice = numDice;
@@ -560,6 +587,8 @@ const setupForm = (attack) => {
       const { numDice, diceType } = parseDiceString(reroll.dice);
       reroll.numDice = numDice;
       reroll.diceType = diceType;
+      reroll.rerollMax = reroll.rerollMax || reroll.rerollIfLessThan || 1;
+      reroll.useRerollMax = reroll.useRerollMax || (reroll.rerollIfLessThan > 1) || false;
     });
   } else {
     attackCopy.rerollDice = [];
@@ -611,6 +640,8 @@ const showAttackForm = () => {
     spellLevel: 0,
     spellComponents: [],
     materialComponents: '',
+    useRerollMax: false,
+    rerollMax: 1,
     damageRolls: [
       {
         dice: '1d6',
@@ -644,6 +675,8 @@ const addDamageRoll = () => {
     type: 'slashing',
     bonus: 0,
     min: 1,
+    useRerollMax: false,
+    rerollMax: 1,
     numDice: 1,
     diceType: 6,
     lifeSteal: { percentage: 0 },
@@ -663,6 +696,8 @@ const addRerollDice = () => {
     numDice: 1,
     diceType: 6,
     min: 1,
+    useRerollMax: false,
+    rerollMax: 1,
   });
 };
 
@@ -781,9 +816,23 @@ const executeAndShowAttack = (attack, isCritical = false) => {
   const summaryData = aggregateResults(allResults);
 
   const getRollsHTML = (rolls) => {
-    return rolls.map(r =>
-      `<span class="roll-value ${r.isReplaced ? 'replaced' : ''}">${r.value}</span>`
-    ).join(', ');
+    return rolls.map(r => {
+      let classes = ['roll-value'];
+      if (r.isReplaced) classes.push('replaced');
+      if (r.rerolled) classes.push('rerolled');
+      if (r.canReroll) classes.push('can-reroll');
+      
+      let title = '';
+      if (r.rerolled) {
+          title = `Reroll: se obtuvo ${r.originalValue}, se tiró de nuevo y salió ${r.rerollValue}. Se eligió ${r.value}.`;
+      } else if (r.canReroll) {
+          title = `Hacer reroll (es &le; ${r.rerollMax})`;
+      } else if (r.originalValue !== undefined && r.originalValue !== r.value && !r.isReplaced) {
+          title = `Mínimo aplicado: era ${r.originalValue}, ahora es ${r.value}`;
+      }
+
+      return `<span class="${classes.join(' ')}" title="${title}">${r.value}</span>`;
+    }).join(', ');
   };
 
   const getRerollResultsHTML = (rerollResults) => {
@@ -897,65 +946,140 @@ const executeAndShowAttack = (attack, isCritical = false) => {
     .reroll-type { margin-bottom: 5px; padding-left: 10px; }
     .swal2-actions { gap: 15px !important; }
     .dnd-reroll-button { background-color: #9b59b6 !important; color: white !important; }
-    .dnd-replace-button { background-color: #f39c12 !important; color: white !important; }`;
+    .dnd-replace-button { background-color: #f39c12 !important; color: white !important; }
+    .mini-checkbox {
+      margin-bottom: 0 !important;
+    }
+
+    .mini-checkbox .checkbox-container {
+      font-size: 0.85rem;
+      padding-left: 25px;
+    }
+
+    .mini-checkbox .checkmark {
+      height: 18px;
+      width: 18px;
+    }
+
+    .roll-value.rerolled { color: #ff9800; text-decoration: underline dotted; cursor: help; }
+    .roll-value.can-reroll { border: 1px dashed #3498db; cursor: help; padding: 1px 3px; border-radius: 3px; }
+    .dnd-reroll-condition-button { background-color: #3498db !important; color: white !important; margin: 5px !important; }`;
 
   let rerollData = null;
 
-  Swal.fire({
-    width: allResults.length > 1 ? 800 : 500,
-    html: renderModalContent(allResults, summaryData),
-    showConfirmButton: true,
-    confirmButtonText: 'Cerrar',
-    showDenyButton: !isCritical && attack.rerollDice && attack.rerollDice.length > 0 && allResults.length === 1,
-    denyButtonText: 'Lanzar Reroll',
-    showCancelButton: false,
-    showCloseButton: true,
-    customClass: {
-      popup: 'dnd-modern-swal-popup',
-      htmlContainer: 'dnd-modern-swal-container',
-      denyButton: 'dnd-reroll-button',
-      cancelButton: 'dnd-replace-button',
-    },
-    didOpen: () => {
-      if (document.getElementById(styleId)) return;
-      const style = document.createElement('style');
-      style.id = styleId;
-      style.innerHTML = originalStyles + newStyles;
-      document.head.appendChild(style);
-    },
-    didClose: () => {
-      if (summaryData.totalHealed > 0) characterStore.heal(summaryData.totalHealed);
-      characterStore.addLog(`Ataque: ${attack.name} (x${allResults.length})`, `Daño total: ${summaryData.grandTotal}. Curación: ${summaryData.totalHealed}.`);
-    },
-    preDeny: () => {
-      rerollData = rollRerollDice(attack.rerollDice);
-      Swal.update({
-        html: renderModalContent(allResults, summaryData, rerollData),
-        showDenyButton: false,
-        showCancelButton: false,
-        footer: '<button id="swal-replace-btn" class="swal2-styled dnd-replace-button">Reemplazar Dados</button>',
-      });
+    const hasConditionRerolls = () => allResults.some(res => 
+      Object.values(res.results).some(type => 
+        type.rolls.some(roll => roll.canReroll)
+      )
+    );
 
-      setTimeout(() => {
-        const replaceBtn = document.getElementById('swal-replace-btn');
-        if (!replaceBtn) return;
+    const generateConditionRerollData = (attackResult) => {
+      const conditionRerollData = {};
+      for (const type in attackResult.results) {
+        attackResult.results[type].rolls.forEach(roll => {
+          if (roll.canReroll) {
+            const diceType = roll.diceType;
+            if (!conditionRerollData[diceType]) conditionRerollData[diceType] = [];
+            conditionRerollData[diceType].push(Math.floor(Math.random() * roll.diceSize) + 1);
+          }
+        });
+      }
+      for (const type in conditionRerollData) {
+        conditionRerollData[type].sort((a, b) => b - a);
+      }
+      return conditionRerollData;
+    };
+
+    const getFooterHTML = (currentRerollData = null) => {
+      let footer = '';
+      if (currentRerollData) {
+        footer += '<button id="swal-replace-btn" class="swal2-styled dnd-replace-button">Reemplazar Dados</button>';
+      }
+      return footer;
+    };
+
+    const attachFooterEvents = (currentRerollData = null) => {
+      const replaceBtn = document.getElementById('swal-replace-btn');
+      if (replaceBtn) {
         replaceBtn.onclick = () => {
-          if (!rerollData) rerollData = rollRerollDice(attack.rerollDice);
-          allResults[0] = replaceDice(allResults[0], rerollData);
+          allResults[0] = replaceDice(allResults[0], currentRerollData);
           const newSummary = aggregateResults(allResults);
           Swal.update({
-            html: renderModalContent(allResults, newSummary, rerollData),
+            html: renderModalContent(allResults, newSummary, currentRerollData),
             showConfirmButton: true,
             showDenyButton: false,
-            showCancelButton: false,
             footer: ''
           });
         };
-      }, 0);
-      return false;
-    }
-  });
-};
+      }
+    };
+
+    const hasAnyRerollAvailable = () => {
+      const hasStandard = !isCritical && attack.rerollDice && attack.rerollDice.length > 0 && allResults.length === 1;
+      const hasCondition = hasConditionRerolls() && allResults.length === 1;
+      return hasStandard || hasCondition;
+    };
+
+    const rollAllAvailableRerolls = () => {
+      const standardRerolls = (!isCritical && allResults.length === 1) ? rollRerollDice(attack.rerollDice) : {};
+      const conditionRerolls = (allResults.length === 1) ? generateConditionRerollData(allResults[0]) : {};
+      
+      // Combinar ambos pools de dados
+      const combined = { ...standardRerolls };
+      for (const diceType in conditionRerolls) {
+        if (combined[diceType]) {
+          combined[diceType] = [...combined[diceType], ...conditionRerolls[diceType]].sort((a, b) => b - a);
+        } else {
+          combined[diceType] = conditionRerolls[diceType];
+        }
+      }
+      return combined;
+    };
+
+    Swal.fire({
+      width: allResults.length > 1 ? 800 : 500,
+      html: renderModalContent(allResults, summaryData),
+      showConfirmButton: true,
+      confirmButtonText: 'Cerrar',
+      showDenyButton: hasAnyRerollAvailable(),
+      denyButtonText: 'Lanzar Reroll',
+      showCancelButton: false,
+      showCloseButton: true,
+      footer: getFooterHTML(),
+      customClass: {
+        popup: 'dnd-modern-swal-popup',
+        htmlContainer: 'dnd-modern-swal-container',
+        denyButton: 'dnd-reroll-button',
+      },
+      didOpen: () => {
+        if (!document.getElementById(styleId)) {
+          const style = document.createElement('style');
+          style.id = styleId;
+          style.innerHTML = originalStyles + newStyles;
+          document.head.appendChild(style);
+        }
+        attachFooterEvents();
+      },
+      didClose: () => {
+        if (summaryData.totalHealed > 0) characterStore.heal(summaryData.totalHealed);
+        characterStore.addLog(`Ataque: ${attack.name} (x${allResults.length})`, `Daño total: ${summaryData.grandTotal}. Curación: ${summaryData.totalHealed}.`);
+      },
+      preDeny: () => {
+        rerollData = rollAllAvailableRerolls();
+        Swal.update({
+          html: renderModalContent(allResults, summaryData, rerollData),
+          showDenyButton: false,
+          showCancelButton: false,
+          footer: getFooterHTML(rerollData),
+        });
+
+        setTimeout(() => {
+          attachFooterEvents(rerollData);
+        }, 0);
+        return false;
+      }
+    });
+  };
 
 </script>
 
@@ -1595,6 +1719,45 @@ const executeAndShowAttack = (attack, isCritical = false) => {
   margin-bottom: 15px;
   padding-bottom: 12px;
   border-bottom: 1px solid #3a3f44;
+}
+
+.special-rule-section {
+  margin-top: 20px;
+  background: rgba(114, 137, 218, 0.05);
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px dashed rgba(114, 137, 218, 0.3);
+}
+
+.special-rule-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 5px 0;
+}
+
+.special-rule-item .checkbox-container {
+  margin-bottom: 0;
+  padding-left: 35px;
+  font-weight: 500;
+}
+
+.special-rule-input {
+  display: flex;
+  align-items: center;
+}
+
+.special-rule-input input {
+  width: 60px !important;
+  text-align: center;
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s, transform 0.3s;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+  transform: translateX(-10px);
 }
 
 .damage-roll-title {

@@ -32,9 +32,15 @@ export const useAttackStore = defineStore('attack', {
           spellLevel: attack.spellLevel || 0,
           spellComponents: attack.spellComponents || [],
           materialComponents: attack.materialComponents || '',
-          rerollDice: attack.rerollDice || [],
+          rerollDice: (attack.rerollDice || []).map(reroll => ({
+            ...reroll,
+            rerollMax: reroll.rerollMax || reroll.rerollIfLessThan || 1,
+            useRerollMax: reroll.useRerollMax || (reroll.rerollIfLessThan > 1) || false,
+          })),
           damageRolls: (attack.damageRolls || []).map(roll => ({
             ...roll,
+            rerollMax: roll.rerollMax || roll.rerollIfLessThan || 1,
+            useRerollMax: roll.useRerollMax || (roll.rerollIfLessThan > 1) || false,
             lifeSteal: roll.lifeSteal || { percentage: 0 },
           })),
         }));
