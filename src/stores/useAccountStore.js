@@ -7,6 +7,7 @@ export const useAccountStore = defineStore('account', {
     accountData: {
       version: 2, // Bump version for new structure
       accountId: null,
+      passwordHash: null,
       characters: [],
       activeCharacterId: null,
       dm: null,
@@ -106,6 +107,7 @@ export const useAccountStore = defineStore('account', {
       const v2Data = {
         version: 2,
         accountId: null,
+        passwordHash: null,
         characters: [],
         activeCharacterId: null,
         dm: v1Data.dm || null,
@@ -368,24 +370,31 @@ export const useAccountStore = defineStore('account', {
      * Recupera datos desde la nube (Google Sheets)
      */
     async loadFromGoogle(accountId) {
+      const data = await this.fetchFromGoogle(accountId);
+      
+      if (data && data.version) {
+        this.accountData = data;
+        this.saveDataToLocalStorage();
+        window.location.reload();
+        return { success: true };
+      } else if (data && data.status === 'not_found') {
+        return { success: false, error: 'No se encontró la cuenta en la nube.' };
+      } else if (data && data.status === 'error') {
+        return { success: false, error: `Error del servidor: ${data.message}` };
+      }
+      return { success: false, error: 'Datos no válidos de la nube.' };
+    },
+
+    /**
+     * Solo descarga los datos de la nube sin aplicarlos
+     */
+    async fetchFromGoogle(accountId) {
       try {
         const response = await fetch(`https://script.google.com/macros/s/AKfycbwyQcRLPKJY5-xqG6ocs8EAzbvy2CXj7Scx_rRR1mj7Q5satDkiQflebamu4YHXdlI3DA/exec?id_data=${accountId}`);
-        const data = await response.json();
-        
-        if (data && data.status === 'not_found') {
-          return { success: false, error: 'No se encontró la cuenta en la nube.' };
-        } else if (data && data.version) {
-          this.accountData = data;
-          this.saveDataToLocalStorage();
-          window.location.reload();
-          return { success: true };
-        } else if (data && data.status === 'error') {
-          return { success: false, error: `Error del servidor: ${data.message}` };
-        }
-        return { success: false, error: 'Datos no válidos de la nube.' };
+        return await response.json();
       } catch (error) {
-        console.error("Error loading from Google:", error);
-        return { success: false, error: 'Error de conexión.' };
+        console.error("Error fetching from Google:", error);
+        return null;
       }
     },
 

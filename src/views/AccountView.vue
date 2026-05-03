@@ -127,6 +127,14 @@ const fileName = ref('');
 const cloudIdInput = ref('');
 const isCloudLoading = ref(false);
 
+const hashPassword = async (password) => {
+  if (!password) return null;
+  const msgUint8 = new TextEncoder().encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
 const handleFileUpload = (event) => {
   const file = event.target.files[0];
   if (!file) return;
@@ -166,21 +174,51 @@ const loadFromCloud = async () => {
   }).then(async (result) => {
     if (result.isConfirmed) {
       isCloudLoading.value = true;
-      const { success, error } = await accountStore.loadFromGoogle(cloudIdInput.value.trim());
+      const data = await accountStore.fetchFromGoogle(cloudIdInput.value.trim());
       isCloudLoading.value = false;
 
-      if (success) {
+      if (data && data.version) {
+        // Verificar contraseña si existe
+        if (data.passwordHash) {
+          const { value: password } = await Swal.fire({
+            title: 'Cuenta protegida',
+            text: 'Introduce la contraseña para cargar estos datos:',
+            input: 'password',
+            inputPlaceholder: 'Contraseña',
+            showCancelButton: true,
+            confirmButtonColor: '#3498db',
+          });
+
+          if (!password) return;
+
+          const hashedInput = await hashPassword(password);
+          if (hashedInput !== data.passwordHash) {
+            Swal.fire({
+              icon: 'error',
+              title: 'Error',
+              text: 'Contraseña incorrecta.',
+            });
+            return;
+          }
+        }
+
+        // Cargar datos
+        accountStore.accountData = data;
+        accountStore.saveDataToLocalStorage();
+
         Swal.fire({
           title: '¡Cargado!',
           text: 'Los datos se han descargado correctamente.',
           icon: 'success',
           timer: 1500,
           showConfirmButton: false
+        }).then(() => {
+           window.location.reload();
         });
       } else {
         Swal.fire({
           title: 'Error',
-          text: error || 'No se pudieron recuperar los datos de la nube.',
+          text: 'No se encontró la cuenta o el ID es inválido.',
           icon: 'error',
         });
       }

@@ -9,6 +9,15 @@ import { useCharacterStore } from './stores/useCharacterStore';
 const accountStore = useAccountStore();
 const { isLoading } = storeToRefs(accountStore);
 
+// Función para hashear la contraseña (SHA-256)
+const hashPassword = async (password) => {
+  if (!password) return null;
+  const msgUint8 = new TextEncoder().encode(password);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
 onMounted(async () => {
   // 1. Cargar datos locales de forma síncrona
   accountStore.loadInitialData();
@@ -38,33 +47,89 @@ onMounted(async () => {
     if (username) {
       const formattedId = username.trim().toLowerCase().replace(/\s+/g, '-');
       
-      Swal.fire({
-        title: 'Conectando con la nube...',
-        text: 'Comprobando si tu usuario ya existe...',
-        allowOutsideClick: false,
-        didOpen: () => { Swal.showLoading(); },
-        customClass: { container: 'high-z-index' }
-      });
-
-      // Intentamos cargar de Google a ver si ya existía ese nombre
-      const { success } = await accountStore.loadFromGoogle(formattedId);
+      // Intentamos descargar de Google para ver si ya existe
+      const data = await accountStore.fetchFromGoogle(formattedId);
       
-      if (success) {
-        // Si success es true, loadFromGoogle hace un reload y recarga la página con los datos.
-        return;
-      } else {
-        // Si no existe en la nube o hay error de conexión, asumimos que es una cuenta nueva y la creamos.
-        accountStore.accountData.accountId = formattedId;
-        accountStore.saveDataToLocalStorage();
-        
-        Swal.fire({
-          icon: 'success',
-          title: '¡Cuenta creada!',
-          text: `Tu ID de usuario es: ${formattedId}`,
-          timer: 3000,
-          showConfirmButton: false,
-          customClass: { container: 'high-z-index' }
+      if (data && data.version) {
+        // El usuario EXISTE -> Pedir contraseña
+        const { value: password } = await Swal.fire({
+          title: 'Usuario registrado',
+          text: `Introduce la contraseña para "${formattedId}":`,
+          input: 'password',
+          inputPlaceholder: 'Tu contraseña',
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          confirmButtonColor: '#3498db',
+          confirmButtonText: 'Entrar',
+          customClass: { container: 'high-z-index' },
+          inputValidator: (value) => {
+            if (!value) return 'Debes introducir la contraseña';
+          }
         });
+
+        if (password) {
+          const hashedInput = await hashPassword(password);
+          
+          // Verificar si coincide con el hash guardado (o si el usuario antiguo no tenía pass)
+          if (!data.passwordHash || hashedInput === data.passwordHash) {
+            Swal.fire({
+              icon: 'success',
+              title: '¡Acceso concedido!',
+              text: 'Cargando tus datos...',
+              timer: 1500,
+              showConfirmButton: false,
+              customClass: { container: 'high-z-index' }
+            });
+            
+            // Aplicar datos y recargar
+            accountStore.accountData = data;
+            accountStore.saveDataToLocalStorage();
+            setTimeout(() => window.location.reload(), 1500);
+            return;
+          } else {
+            await Swal.fire({
+              icon: 'error',
+              title: 'Contraseña incorrecta',
+              text: 'No tienes permiso para acceder a esta cuenta.',
+              customClass: { container: 'high-z-index' }
+            });
+            window.location.reload();
+            return;
+          }
+        }
+      } else {
+        // El usuario NO EXISTE -> Crear cuenta con contraseña
+        const { value: password } = await Swal.fire({
+          title: 'Nueva cuenta',
+          text: 'Crea una contraseña para proteger tus datos:',
+          input: 'password',
+          inputPlaceholder: 'Tu nueva contraseña',
+          allowOutsideClick: false,
+          allowEscapeKey: false,
+          confirmButtonColor: '#2ecc71',
+          confirmButtonText: 'Crear cuenta',
+          customClass: { container: 'high-z-index' },
+          inputValidator: (value) => {
+            if (!value) return 'La contraseña es obligatoria para proteger tus datos';
+            if (value.length < 4) return 'La contraseña debe tener al menos 4 caracteres';
+          }
+        });
+
+        if (password) {
+          const hashedPass = await hashPassword(password);
+          accountStore.accountData.accountId = formattedId;
+          accountStore.accountData.passwordHash = hashedPass;
+          accountStore.saveDataToLocalStorage();
+          
+          Swal.fire({
+            icon: 'success',
+            title: '¡Cuenta creada!',
+            text: `ID: ${formattedId}. ¡No olvides tu contraseña!`,
+            timer: 3000,
+            showConfirmButton: false,
+            customClass: { container: 'high-z-index' }
+          });
+        }
       }
     }
   }
